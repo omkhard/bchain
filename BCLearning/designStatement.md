@@ -1,39 +1,22 @@
 # Introduction
 
-┌─────────────────────────────────────────┐
-│     Input: Solidity Smart Contract      │
-└──────────────┬──────────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────────┐
-│   Python Parser (solidity-parser)       │
-│   - Extract functions, modifiers        │
-│   - Build AST (Abstract Syntax Tree)    │
-└──────────────┬──────────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────────┐
-│   Vulnerability Detection Engine        │
-│   - Pattern matching rules (Python)     │
-│   - Custom security checks              │
-└──────────────┬──────────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────────┐
-│   Automated Testing (Web3.py)           │
-│   - Deploy to local testnet             │
-│   - Execute attack scenarios            │
-│   - Verify vulnerabilities              │
-└──────────────┬──────────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────────┐
-│   Report Generator                      │
-│   - Severity scoring                    │
-│   - Remediation suggestions             │
-│   - Export formats (JSON/HTML/PDF)      │
-└─────────────────────────────────────────┘
+# Blockchain Security Project: Smart Contract Vulnerability Scanner
 
+## Project Overview
+An interactive tool that analyzes Solidity smart contracts for security vulnerabilities using Python, DevSecOps practices, and blockchain testing frameworks.
+
+<details>
+<summary>🔍 Project Architecture</summary>
+
+```mermaid
+graph TD
+    A[Input: Solidity Smart Contract] --> B[Python Parser]
+    B --> C[Build AST]
+    C --> D[Vulnerability Detection Engine]
+    D --> E[Automated Testing]
+    E --> F[Report Generator]
+    F --> G[Export Formats]
+```
 -----------------------------------------------------------
 ## Stages - 
 
