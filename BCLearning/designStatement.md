@@ -17,8 +17,8 @@ graph TD
     E --> F[Report Generator]
     F --> G[Export Formats]
 ```
-</details>>
------------------------------------------------------------
+</details>
+
 ## Stages - 
 
 ### Problem Statement 
