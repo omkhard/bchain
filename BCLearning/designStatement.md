@@ -21,7 +21,7 @@ graph TD
 ## Stages - 
 
 ### Problem Statement 
-https://owasp.org/www-project-smart-contract-top-10/2025/en/src/SC05-reentrancy-attacks.html
+https://owasp.org/www-project-smart-contract-top-10/2025/en/src/SC05-reentrancy-attacks.html <br>
 A reentrancy attack exploits the vulnerability in smart contracts when a function makes an external call to another contract before updating its own state. This allows the external contract, possibly malicious, to reenter the original function and repeat certain actions, like withdrawals, using the same state. Through such attacks, an attacker can possibly drain all the funds from a contract.
 
 ``` java
