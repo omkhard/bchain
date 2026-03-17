@@ -1,0 +1,7 @@
+web3
+py-solc-x
+slither-analyzer
+pytest
+flask
+python-dotenv
+requests

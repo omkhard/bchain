@@ -49,8 +49,11 @@ contract Solidity_Reentrancy {
     }
 }
 ```
-### Setup environment
+### Setup environment In Virtual ENV (virtualenv)
 ``` bash
+# Author : omkhard
+#
+# basicallly requirements.txt it is 
 pip install web3 py-solc-x slither-analyzer
 npm install -g ganache hardhat
 ```
