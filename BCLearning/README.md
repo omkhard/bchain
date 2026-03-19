@@ -1,7 +1,7 @@
-# RE-GUARD — Reentrancy Vulnerability Scanner
+# BLOCKCHAIN-REENTERANCY-DETECTOR — Reentrancy Vulnerability Scanner
 ### How It Works: A Complete Technical Breakdown
 
-> **Purpose:** This document explains how the RE-GUARD scanner is built using only a single HTML file — no frameworks, no backend, no dependencies — and how each piece of the technology works together.
+> **Purpose:** This document explains how the BLOCKCHAIN-REENTERANCY-DETECTOR scanner is built using only a single HTML file — no frameworks, no backend, no dependencies — and how each piece of the technology works together.
 
 ---
 
@@ -358,7 +358,7 @@ Score thresholds map to risk labels:
 
 This scanner uses regex, which is fast and dependency-free but has real limitations. Here's how production tools compare:
 
-| Feature | RE-GUARD (regex) | Slither / MythX (AST) |
+| Feature | BLOCKCHAIN-REENTERANCY-DETECTOR (regex) | Slither / MythX (AST) |
 |---|---|---|
 | **Parsing** | String pattern matching | Full abstract syntax tree |
 | **Cross-function analysis** | Limited | Full call graph traversal |
@@ -442,4 +442,4 @@ The mutex sets a flag to `ENTERED` before executing the function. Any recursive 
 
 ---
 
-*RE-GUARD is an educational tool. For production Solidity auditing, use [Slither](https://github.com/crytic/slither), [MythX](https://mythx.io/), or hire a professional auditor.*
+*BLOCKCHAIN-REENTERANCY-DETECTOR is an educational tool. For production Solidity auditing, use [Slither](https://github.com/crytic/slither), [MythX](https://mythx.io/), or hire a professional auditor.*
