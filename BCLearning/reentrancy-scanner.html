@@ -1,0 +1,1402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BLOCKCHAIN-REENTERANCY-DETECTOR · Reentrancy Scanner</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050a0f;
+    --bg2: #080f18;
+    --panel: #0a1520;
+    --border: #0e2a40;
+    --accent: #00f5d4;
+    --red: #ff3a5c;
+    --yellow: #ffc93c;
+    --green: #00e676;
+    --blue: #00b4ff;
+    --text: #c8e0f0;
+    --muted: #3a5a70;
+    --glow: 0 0 20px rgba(0,245,212,0.3);
+    --red-glow: 0 0 20px rgba(255,58,92,0.4);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,180,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,180,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Scanline overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .container {
+    position: relative;
+    z-index: 2;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+
+  /* ── HEADER ── */
+  header {
+    padding: 32px 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 36px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo-icon {
+    width: 44px;
+    height: 44px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .logo-icon svg { filter: drop-shadow(0 0 8px var(--accent)); }
+
+  .logo-text {
+    font-family: 'Orbitron', monospace;
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: 4px;
+    color: var(--accent);
+    text-shadow: 0 0 20px rgba(0,245,212,0.5);
+  }
+
+  .logo-sub {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    margin-top: 2px;
+  }
+
+  .badge {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    padding: 4px 12px;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    background: rgba(0,245,212,0.05);
+  }
+
+  /* ── MAIN LAYOUT ── */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: 20px;
+  }
+
+  @media (max-width: 900px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ── PANEL ── */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.6;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(0,20,40,0.5);
+  }
+
+  .panel-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+
+  .panel-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: blink 2s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+
+  /* ── EDITOR ── */
+  .editor-wrap {
+    position: relative;
+  }
+
+  .line-numbers {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 48px;
+    background: rgba(0,10,20,0.5);
+    border-right: 1px solid var(--border);
+    padding: 16px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .line-numbers span {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    padding: 0 10px;
+    line-height: 20px;
+    min-height: 20px;
+  }
+
+  textarea#code {
+    width: 100%;
+    min-height: 420px;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #7fd0ff;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    line-height: 20px;
+    padding: 16px 16px 16px 64px;
+    resize: vertical;
+    tab-size: 4;
+    caret-color: var(--accent);
+  }
+
+  textarea#code::placeholder { color: var(--muted); }
+
+  /* ── CONTROLS ── */
+  .controls {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: rgba(0,10,20,0.4);
+  }
+
+  .btn-scan {
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    padding: 12px 32px;
+    background: transparent;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    cursor: pointer;
+    text-transform: uppercase;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s;
+  }
+
+  .btn-scan::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--accent);
+    transform: translateX(-100%);
+    transition: transform 0.2s;
+    z-index: -1;
+  }
+
+  .btn-scan:hover { color: var(--bg); }
+  .btn-scan:hover::before { transform: translateX(0); }
+  .btn-scan:active { transform: scale(0.97); }
+
+  .btn-clear {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    padding: 10px 20px;
+    background: transparent;
+    border: 1px solid var(--muted);
+    color: var(--muted);
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+
+  .btn-clear:hover { border-color: var(--text); color: var(--text); }
+
+  .btn-demo {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    padding: 10px 20px;
+    background: transparent;
+    border: 1px solid var(--yellow);
+    color: var(--yellow);
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    margin-left: auto;
+  }
+
+  .btn-demo:hover { background: rgba(255,201,60,0.1); }
+
+  /* ── SIDEBAR ── */
+  .sidebar { display: flex; flex-direction: column; gap: 20px; }
+
+  /* ── SCORE PANEL ── */
+  .score-panel {
+    padding: 24px;
+    text-align: center;
+    position: relative;
+  }
+
+  .score-ring {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 16px;
+    position: relative;
+  }
+
+  .score-ring svg { transform: rotate(-90deg); }
+
+  .score-ring circle {
+    fill: none;
+    stroke-width: 8;
+  }
+
+  .score-ring .track { stroke: var(--border); }
+
+  .score-ring .fill {
+    stroke: var(--green);
+    stroke-dasharray: 339;
+    stroke-dashoffset: 339;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s ease, stroke 0.5s ease;
+  }
+
+  .score-num {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Orbitron', monospace;
+  }
+
+  .score-num .num {
+    font-size: 28px;
+    font-weight: 900;
+    color: var(--green);
+    text-shadow: 0 0 20px currentColor;
+    transition: color 0.5s;
+  }
+
+  .score-num .label {
+    font-size: 8px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .score-status {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: var(--muted);
+  }
+
+  /* ── STATS ── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    margin-top: 20px;
+  }
+
+  .stat {
+    background: var(--panel);
+    padding: 14px;
+    text-align: center;
+  }
+
+  .stat-val {
+    font-family: 'Orbitron', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    transition: color 0.3s;
+  }
+
+  .stat-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    margin-top: 4px;
+  }
+
+  /* ── PATTERNS ── */
+  .patterns-list {
+    padding: 12px 0;
+  }
+
+  .pattern-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    border-bottom: 1px solid rgba(14,42,64,0.5);
+    cursor: default;
+    transition: background 0.15s;
+  }
+
+  .pattern-item:last-child { border-bottom: none; }
+  .pattern-item:hover { background: rgba(0,180,255,0.04); }
+
+  .pattern-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .pattern-name {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--text);
+    flex: 1;
+  }
+
+  .pattern-status {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    padding: 2px 8px;
+    border-radius: 2px;
+  }
+
+  .status-ok { color: var(--green); background: rgba(0,230,118,0.08); border: 1px solid rgba(0,230,118,0.2); }
+  .status-warn { color: var(--yellow); background: rgba(255,201,60,0.08); border: 1px solid rgba(255,201,60,0.2); }
+  .status-fail { color: var(--red); background: rgba(255,58,92,0.08); border: 1px solid rgba(255,58,92,0.2); }
+  .status-idle { color: var(--muted); background: rgba(58,90,112,0.08); border: 1px solid rgba(58,90,112,0.2); }
+
+  /* ── RESULTS ── */
+  .results-panel {
+    margin-top: 20px;
+  }
+
+  .result-list {
+    padding: 0;
+    max-height: 340px;
+    overflow-y: auto;
+  }
+
+  .result-list::-webkit-scrollbar { width: 4px; }
+  .result-list::-webkit-scrollbar-track { background: var(--bg); }
+  .result-list::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .result-item {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    animation: slideIn 0.3s ease forwards;
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+
+  @keyframes slideIn {
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .result-item:last-child { border-bottom: none; }
+
+  .result-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .severity-badge {
+    font-family: 'Orbitron', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 3px 8px;
+  }
+
+  .sev-critical { background: rgba(255,58,92,0.15); color: var(--red); border: 1px solid var(--red); }
+  .sev-high { background: rgba(255,120,0,0.12); color: #ff7800; border: 1px solid #ff7800; }
+  .sev-medium { background: rgba(255,201,60,0.1); color: var(--yellow); border: 1px solid var(--yellow); }
+  .sev-low { background: rgba(0,180,255,0.08); color: var(--blue); border: 1px solid var(--blue); }
+  .sev-info { background: rgba(0,230,118,0.08); color: var(--green); border: 1px solid var(--green); }
+
+  .result-line {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  .result-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .result-desc {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .result-code {
+    margin-top: 8px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--red);
+    padding: 8px 12px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: #ff8fa0;
+  }
+
+  .result-fix {
+    margin-top: 8px;
+    background: rgba(0,230,118,0.04);
+    border: 1px solid rgba(0,230,118,0.2);
+    border-left: 3px solid var(--green);
+    padding: 8px 12px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: #80ffb0;
+  }
+
+  .fix-label {
+    font-size: 10px;
+    color: var(--green);
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+  }
+
+  /* empty state */
+  .empty-state {
+    padding: 40px 20px;
+    text-align: center;
+  }
+
+  .empty-icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+    opacity: 0.3;
+  }
+
+  .empty-text {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 2px;
+  }
+
+  /* ── SCANNING ANIMATION ── */
+  .scan-bar {
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    position: absolute;
+    left: 0; right: 0;
+    top: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .scanning .scan-bar {
+    opacity: 1;
+    animation: scanMove 0.8s ease-in-out infinite;
+  }
+
+  @keyframes scanMove {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(420px); }
+  }
+
+  /* info tooltip */
+  .info-bar {
+    padding: 10px 20px;
+    background: rgba(0,180,255,0.05);
+    border-bottom: 1px solid var(--border);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--blue);
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* tab system */
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tab {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    padding: 12px 20px;
+    cursor: pointer;
+    color: var(--muted);
+    border-right: 1px solid var(--border);
+    transition: all 0.2s;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    position: relative;
+    top: 1px;
+  }
+
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* learn section */
+  .learn-item {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .learn-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--accent);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+
+  .learn-arrow { transition: transform 0.2s; font-size: 10px; }
+  .learn-title.open .learn-arrow { transform: rotate(90deg); }
+
+  .learn-body {
+    display: none;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-top: 8px;
+  }
+
+  .learn-body.open { display: block; }
+
+  .learn-code {
+    margin-top: 10px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--red);
+    padding: 12px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: #aad4ff;
+    line-height: 1.8;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  .learn-note {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: rgba(0,245,212,0.05);
+    border-left: 3px solid var(--accent);
+    font-size: 12px;
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">
+        <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+          <polygon points="22,4 40,34 4,34" stroke="#00f5d4" stroke-width="2" fill="rgba(0,245,212,0.08)"/>
+          <line x1="22" y1="14" x2="22" y2="26" stroke="#00f5d4" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="22" cy="30" r="1.5" fill="#00f5d4"/>
+        </svg>
+      </div>
+      <div>
+        <div class="logo-text">BLOCKCHAIN-REENTERANCY-DETECTOR</div>
+        <div class="logo-sub">REENTRANCY VULNERABILITY SCANNER</div>
+      </div>
+    </div>
+    <div class="badge">v1.0.0-edu</div>
+  </header>
+
+  <div class="main-grid">
+
+    <!-- LEFT: Editor + Results -->
+    <div>
+      <!-- Editor -->
+      <div class="panel" id="editorPanel">
+        <div class="scan-bar" id="scanBar"></div>
+        <div class="panel-header">
+          <span class="panel-title">// CONTRACT INPUT</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--muted)" id="lineCount">0 LINES</span>
+            <div class="panel-dot"></div>
+          </div>
+        </div>
+        <div class="editor-wrap">
+          <div class="line-numbers" id="lineNums"></div>
+          <textarea id="code" spellcheck="false" placeholder="// Paste your Solidity contract here...&#10;// pragma solidity ^0.8.0;"></textarea>
+        </div>
+        <div class="controls">
+          <button class="btn-scan" onclick="runScan()">⬡ SCAN CONTRACT</button>
+          <button class="btn-clear" onclick="clearAll()">CLEAR</button>
+          <button class="btn-demo" onclick="loadDemo('vuln')">LOAD VULNERABLE</button>
+          <button class="btn-demo" style="border-color:var(--green);color:var(--green)" onclick="loadDemo('safe')">LOAD SAFE</button>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div class="panel results-panel" style="margin-top:20px">
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab('findings', this)">FINDINGS</button>
+          <button class="tab" onclick="switchTab('learn', this)">LEARN</button>
+        </div>
+
+        <!-- Findings tab -->
+        <div class="tab-content active" id="tab-findings">
+          <div class="result-list" id="resultList">
+            <div class="empty-state">
+              <div class="empty-icon">⬡</div>
+              <div class="empty-text">AWAITING SCAN INPUT</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Learn tab -->
+        <div class="tab-content" id="tab-learn">
+          <div class="learn-item">
+            <div class="learn-title" onclick="toggleLearn(this)">
+              <span class="learn-arrow">▶</span> What is a Reentrancy Attack?
+            </div>
+            <div class="learn-body">
+              A reentrancy attack occurs when an external contract call is made before updating internal state. The called contract can recursively call back into the vulnerable function, draining funds or corrupting state.
+              <div class="learn-code">// VULNERABLE PATTERN
+function withdraw(uint amount) public {
+    require(balances[msg.sender] >= amount);
+    // ❌ External call BEFORE state update
+    (bool ok,) = msg.sender.call{value: amount}("");
+    balances[msg.sender] -= amount; // Too late!
+}</div>
+              <div class="learn-note">💡 Famous example: The 2016 DAO hack drained ~$60M ETH using this exact pattern.</div>
+            </div>
+          </div>
+          <div class="learn-item">
+            <div class="learn-title" onclick="toggleLearn(this)">
+              <span class="learn-arrow">▶</span> Checks-Effects-Interactions (CEI)
+            </div>
+            <div class="learn-body">
+              The safest pattern to prevent reentrancy. Always follow this order: 1) Check conditions, 2) Update state (effects), 3) Make external calls (interactions).
+              <div class="learn-code">// SAFE PATTERN — CEI Applied
+function withdraw(uint amount) public {
+    // ✅ Check
+    require(balances[msg.sender] >= amount);
+    // ✅ Effect — update state FIRST
+    balances[msg.sender] -= amount;
+    // ✅ Interact — call AFTER state update
+    (bool ok,) = msg.sender.call{value: amount}("");
+    require(ok);
+}</div>
+            </div>
+          </div>
+          <div class="learn-item">
+            <div class="learn-title" onclick="toggleLearn(this)">
+              <span class="learn-arrow">▶</span> ReentrancyGuard (Mutex Lock)
+            </div>
+            <div class="learn-body">
+              OpenZeppelin's ReentrancyGuard provides a mutex that prevents a function from being called recursively. Use the <code>nonReentrant</code> modifier.
+              <div class="learn-code">// Using OpenZeppelin ReentrancyGuard
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+
+contract Safe is ReentrancyGuard {
+    function withdraw(uint amount) public nonReentrant {
+        require(balances[msg.sender] >= amount);
+        balances[msg.sender] -= amount;
+        (bool ok,) = msg.sender.call{value: amount}("");
+        require(ok);
+    }
+}</div>
+              <div class="learn-note">💡 The nonReentrant modifier sets a lock before execution and releases it after, blocking recursive calls.</div>
+            </div>
+          </div>
+          <div class="learn-item">
+            <div class="learn-title" onclick="toggleLearn(this)">
+              <span class="learn-arrow">▶</span> Cross-Function Reentrancy
+            </div>
+            <div class="learn-body">
+              More subtle: an attacker calls function A which makes an external call, then re-enters via a different function B that shares the same state variable.
+              <div class="learn-code">// VULNERABLE — Cross-function attack possible
+mapping(address => uint) public balances;
+
+function withdraw() public {
+    uint bal = balances[msg.sender];
+    (bool ok,) = msg.sender.call{value: bal}(""); // ← re-enter via transfer?
+    balances[msg.sender] = 0;
+}
+
+function transfer(address to, uint amt) public {
+    require(balances[msg.sender] >= amt); // ← can be exploited mid-withdraw
+    balances[msg.sender] -= amt;
+    balances[to] += amt;
+}</div>
+            </div>
+          </div>
+          <div class="learn-item">
+            <div class="learn-title" onclick="toggleLearn(this)">
+              <span class="learn-arrow">▶</span> Read-Only Reentrancy
+            </div>
+            <div class="learn-body">
+              A newer attack vector where a re-entrant call reads stale state from a contract mid-execution. Even if no funds are drained directly, incorrect prices or balances can be used for flash loan attacks.
+              <div class="learn-note">💡 Commonly affects DEX integrations and oracle reads. Curve Finance was exploited via this vector in 2023.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Sidebar -->
+    <div class="sidebar">
+
+      <!-- Score -->
+      <div class="panel score-panel">
+        <div class="panel-header" style="margin:-24px -24px 20px">
+          <span class="panel-title">// SECURITY SCORE</span>
+          <div class="panel-dot" style="background:var(--blue);box-shadow:0 0 8px var(--blue)"></div>
+        </div>
+
+        <div class="score-ring">
+          <svg width="120" height="120" viewBox="0 0 120 120">
+            <circle class="track" cx="60" cy="60" r="54"/>
+            <circle class="fill" id="scoreFill" cx="60" cy="60" r="54"/>
+          </svg>
+          <div class="score-num">
+            <div class="num" id="scoreNum">--</div>
+            <div class="label">/ 100</div>
+          </div>
+        </div>
+
+        <div class="score-status" id="scoreStatus">AWAITING SCAN</div>
+
+        <div class="stats-grid">
+          <div class="stat">
+            <div class="stat-val" id="statCritical" style="color:var(--red)">0</div>
+            <div class="stat-label">CRITICAL</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val" id="statHigh" style="color:#ff7800">0</div>
+            <div class="stat-label">HIGH</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val" id="statMedium" style="color:var(--yellow)">0</div>
+            <div class="stat-label">MEDIUM</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val" id="statLow" style="color:var(--blue)">0</div>
+            <div class="stat-label">LOW</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pattern Checklist -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">// PATTERN CHECKS</span>
+          <div class="panel-dot" style="background:var(--yellow);box-shadow:0 0 8px var(--yellow)"></div>
+        </div>
+        <div class="patterns-list" id="patternList">
+          <!-- filled by JS -->
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Patterns config ──
+const PATTERNS = [
+  { id: 'external_call_before_update', name: 'External Call Before State Update', severity: 'critical' },
+  { id: 'missing_nonreentrant', name: 'Missing nonReentrant Guard', severity: 'high' },
+  { id: 'raw_call', name: 'Raw .call() Usage', severity: 'high' },
+  { id: 'send_transfer', name: '.send() / .transfer() Usage', severity: 'medium' },
+  { id: 'cross_function', name: 'Cross-Function Reentrancy Risk', severity: 'medium' },
+  { id: 'no_cei', name: 'CEI Pattern Violation', severity: 'high' },
+  { id: 'loop_external', name: 'External Call Inside Loop', severity: 'critical' },
+  { id: 'delegatecall', name: 'delegatecall Usage', severity: 'medium' },
+  { id: 'fallback_logic', name: 'Complex Fallback/Receive Function', severity: 'low' },
+  { id: 'reentrancy_guard_present', name: 'ReentrancyGuard Present', severity: 'info' },
+];
+
+// ── Demo contracts ──
+const DEMO_VULN = `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+// ⚠️  VULNERABLE CONTRACT — FOR EDUCATIONAL USE ONLY
+contract VulnerableBank {
+    mapping(address => uint256) public balances;
+
+    function deposit() external payable {
+        balances[msg.sender] += msg.value;
+    }
+
+    // ❌ Classic reentrancy: external call before state update
+    function withdraw(uint256 amount) external {
+        require(balances[msg.sender] >= amount, "Insufficient balance");
+        
+        // DANGER: call happens before balance update
+        (bool success, ) = msg.sender.call{value: amount}("");
+        require(success, "Transfer failed");
+        
+        // ❌ Too late — attacker can re-enter before this line
+        balances[msg.sender] -= amount;
+    }
+
+    // ❌ Another vulnerable function sharing state
+    function withdrawAll() external {
+        uint256 bal = balances[msg.sender];
+        require(bal > 0, "Nothing to withdraw");
+        
+        // ❌ Raw call without guard
+        (bool ok, ) = msg.sender.call{value: bal}("");
+        require(ok);
+        balances[msg.sender] = 0;
+    }
+
+    // ❌ Loop with external call
+    function distributeRewards(address[] calldata users, uint256 reward) external {
+        for (uint i = 0; i < users.length; i++) {
+            (bool ok, ) = users[i].call{value: reward}("");
+        }
+    }
+
+    receive() external payable {
+        if (msg.value > 0) {
+            balances[msg.sender] += msg.value;
+            // complex logic in receive — risky
+            _processDeposit(msg.sender);
+        }
+    }
+
+    function _processDeposit(address user) internal {
+        balances[user] += 1;
+    }
+}`;
+
+const DEMO_SAFE = `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+
+// ✅  SAFE CONTRACT — Demonstrates best practices
+contract SecureBank is ReentrancyGuard {
+    mapping(address => uint256) public balances;
+    
+    event Deposit(address indexed user, uint256 amount);
+    event Withdrawal(address indexed user, uint256 amount);
+
+    function deposit() external payable {
+        require(msg.value > 0, "Must send ETH");
+        balances[msg.sender] += msg.value;
+        emit Deposit(msg.sender, msg.value);
+    }
+
+    // ✅ CEI pattern + nonReentrant guard
+    function withdraw(uint256 amount) external nonReentrant {
+        // ✅ CHECK
+        require(balances[msg.sender] >= amount, "Insufficient balance");
+        
+        // ✅ EFFECT — state updated BEFORE external call
+        balances[msg.sender] -= amount;
+        
+        // ✅ INTERACT — external call last
+        (bool success, ) = msg.sender.call{value: amount}("");
+        require(success, "Transfer failed");
+        
+        emit Withdrawal(msg.sender, amount);
+    }
+
+    // ✅ Also protected
+    function withdrawAll() external nonReentrant {
+        uint256 bal = balances[msg.sender];
+        require(bal > 0, "Nothing to withdraw");
+        
+        // ✅ Effect first
+        balances[msg.sender] = 0;
+        
+        // ✅ Then interact
+        (bool ok, ) = msg.sender.call{value: bal}("");
+        require(ok, "Transfer failed");
+        
+        emit Withdrawal(msg.sender, bal);
+    }
+
+    function getBalance() external view returns (uint256) {
+        return balances[msg.sender];
+    }
+
+    receive() external payable {
+        balances[msg.sender] += msg.value;
+    }
+}`;
+
+// ── Init ──
+renderPatterns([]);
+updateLineNumbers();
+
+document.getElementById('code').addEventListener('input', updateLineNumbers);
+
+function updateLineNumbers() {
+  const code = document.getElementById('code').value;
+  const lines = code.split('\n').length;
+  document.getElementById('lineCount').textContent = lines + ' LINES';
+  const nums = document.getElementById('lineNums');
+  nums.innerHTML = Array.from({length: lines}, (_, i) =>
+    `<span>${i + 1}</span>`
+  ).join('');
+}
+
+function renderPatterns(results) {
+  const el = document.getElementById('patternList');
+  el.innerHTML = PATTERNS.map(p => {
+    const found = results.find(r => r.patternId === p.id);
+    let statusClass = 'status-idle', statusText = 'PENDING';
+    if (results.length > 0) {
+      if (p.id === 'reentrancy_guard_present') {
+        statusClass = found ? 'status-ok' : 'status-warn';
+        statusText = found ? 'FOUND' : 'ABSENT';
+      } else {
+        statusClass = found ? 'status-fail' : 'status-ok';
+        statusText = found ? 'DETECTED' : 'CLEAN';
+      }
+    }
+    const dotColor = p.severity === 'critical' ? 'var(--red)' :
+                     p.severity === 'high' ? '#ff7800' :
+                     p.severity === 'medium' ? 'var(--yellow)' :
+                     p.severity === 'info' ? 'var(--green)' : 'var(--blue)';
+    return `<div class="pattern-item">
+      <div class="pattern-dot" style="background:${dotColor}"></div>
+      <div class="pattern-name">${p.name}</div>
+      <div class="pattern-status ${statusClass}">${statusText}</div>
+    </div>`;
+  }).join('');
+}
+
+function loadDemo(type) {
+  const ta = document.getElementById('code');
+  ta.value = type === 'vuln' ? DEMO_VULN : DEMO_SAFE;
+  updateLineNumbers();
+}
+
+function clearAll() {
+  document.getElementById('code').value = '';
+  updateLineNumbers();
+  document.getElementById('resultList').innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">⬡</div>
+      <div class="empty-text">AWAITING SCAN INPUT</div>
+    </div>`;
+  renderPatterns([]);
+  updateScore(null, []);
+}
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+function toggleLearn(el) {
+  el.classList.toggle('open');
+  el.nextElementSibling.classList.toggle('open');
+}
+
+// ── Scanner ──
+function analyzeContract(code) {
+  const findings = [];
+  const lines = code.split('\n');
+
+  function lineOf(pattern) {
+    for (let i = 0; i < lines.length; i++) {
+      if (pattern.test(lines[i])) return i + 1;
+    }
+    return null;
+  }
+
+  function allLines(pattern) {
+    const found = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (pattern.test(lines[i])) found.push(i + 1);
+    }
+    return found;
+  }
+
+  const hasReentrancyGuard = /ReentrancyGuard/.test(code) || /nonReentrant/.test(code);
+  const hasReceive = /receive\s*\(\s*\)\s*external/.test(code);
+  const hasFallback = /fallback\s*\(\s*\)\s*external/.test(code);
+
+  // 1. ReentrancyGuard check (info)
+  if (hasReentrancyGuard) {
+    findings.push({
+      patternId: 'reentrancy_guard_present',
+      severity: 'info',
+      title: 'ReentrancyGuard Detected',
+      line: lineOf(/ReentrancyGuard/) || lineOf(/nonReentrant/) || 1,
+      desc: 'OpenZeppelin ReentrancyGuard is imported or nonReentrant modifier is used. Good practice.',
+      snippet: null,
+      fix: null
+    });
+  } else {
+    findings.push({
+      patternId: 'missing_nonreentrant',
+      severity: 'high',
+      title: 'No ReentrancyGuard or nonReentrant Modifier',
+      line: 1,
+      desc: 'No reentrancy protection mechanism detected. Consider using OpenZeppelin\'s ReentrancyGuard or a custom mutex for functions that make external calls.',
+      snippet: '// Missing: import "@openzeppelin/contracts/security/ReentrancyGuard.sol"',
+      fix: 'import "@openzeppelin/contracts/security/ReentrancyGuard.sol";\ncontract MyContract is ReentrancyGuard { ... }'
+    });
+  }
+
+  // 2. Raw .call() before state update — classic reentrancy
+  const callLines = allLines(/\.call\s*\{.*value.*\}\s*\(/);
+  for (const ln of callLines) {
+    // Check if there's a state update AFTER this line (within next 10 lines)
+    let hasUpdateAfter = false;
+    for (let i = ln; i < Math.min(ln + 10, lines.length); i++) {
+      if (/\w+\s*[\-+]?=/.test(lines[i]) && !/require|bool|address/.test(lines[i])) {
+        hasUpdateAfter = true;
+        break;
+      }
+    }
+    if (hasUpdateAfter) {
+      findings.push({
+        patternId: 'external_call_before_update',
+        severity: 'critical',
+        title: 'External Call Before State Update (Classic Reentrancy)',
+        line: ln,
+        desc: 'An external .call{value}() is made before the contract\'s state variables are updated. This is the classic reentrancy vulnerability pattern. An attacker can recursively call back into this function before the balance is decremented.',
+        snippet: lines[ln - 1].trim(),
+        fix: '// Update state BEFORE external call (CEI pattern):\nbalances[msg.sender] -= amount; // Effect first\n(bool ok,) = msg.sender.call{value: amount}(""); // Then interact'
+      });
+    } else if (!hasReentrancyGuard) {
+      findings.push({
+        patternId: 'raw_call',
+        severity: 'high',
+        title: 'Unprotected Raw .call() with ETH Transfer',
+        line: ln,
+        desc: 'Raw .call{value}() is used without a reentrancy guard. Even if CEI is followed, raw calls are higher risk than transfer/send and should be protected.',
+        snippet: lines[ln - 1].trim(),
+        fix: '// Either use nonReentrant modifier or verify CEI pattern is strictly followed.'
+      });
+    }
+  }
+
+  // 3. .send() / .transfer()
+  const sendLines = allLines(/\.(send|transfer)\s*\(/);
+  for (const ln of sendLines) {
+    findings.push({
+      patternId: 'send_transfer',
+      severity: 'medium',
+      title: '.send() / .transfer() Usage (Gas Limit Risk)',
+      line: ln,
+      desc: '.send() and .transfer() forward only 2300 gas, which prevents most reentrancy but may break with future gas cost changes (EIP-1884). Modern contracts prefer .call{value}() with proper guards.',
+      snippet: lines[ln - 1].trim(),
+      fix: '(bool ok,) = recipient.call{value: amount}("");\nrequire(ok, "Transfer failed");'
+    });
+  }
+
+  // 4. Loop with external call
+  let inLoop = false, loopDepth = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/\b(for|while)\s*\(/.test(line)) { inLoop = true; loopDepth = 0; }
+    if (inLoop) {
+      loopDepth += (line.match(/\{/g) || []).length;
+      loopDepth -= (line.match(/\}/g) || []).length;
+      if (loopDepth <= 0) inLoop = false;
+      if (/\.call\s*\{/.test(line) || /\.(send|transfer)\s*\(/.test(line)) {
+        findings.push({
+          patternId: 'loop_external',
+          severity: 'critical',
+          title: 'External Call Inside Loop',
+          line: i + 1,
+          desc: 'Making external calls inside a loop is extremely dangerous. Each iteration can be re-entered, and gas costs may cause the loop to revert, potentially bricking contract functionality.',
+          snippet: lines[i].trim(),
+          fix: '// Use a pull-payment pattern instead:\n// Let users withdraw their own funds rather than pushing to all users in a loop.'
+        });
+      }
+    }
+  }
+
+  // 5. Complex fallback/receive
+  if (hasReceive || hasFallback) {
+    const ln = lineOf(/receive\s*\(\s*\)\s*external/) || lineOf(/fallback\s*\(\s*\)\s*external/);
+    const funcBody = code.substring(code.indexOf('receive()') > -1 ? code.indexOf('receive()') : code.indexOf('fallback()'));
+    const bodyLines = funcBody.split('\n').slice(0, 15).join('\n');
+    if (/if|for|while|call|\.transfer|balances/.test(bodyLines)) {
+      findings.push({
+        patternId: 'fallback_logic',
+        severity: 'low',
+        title: 'Complex Logic in receive()/fallback()',
+        line: ln || 1,
+        desc: 'The receive() or fallback() function contains non-trivial logic. These functions are triggered during ETH sends and can be exploited in reentrancy attack chains.',
+        snippet: 'receive() external payable { ... complex logic ... }',
+        fix: '// Keep receive/fallback minimal:\nreceive() external payable {}\n// Or just: emit Received(msg.sender, msg.value);'
+      });
+    }
+  }
+
+  // 6. delegatecall
+  const delLines = allLines(/\.delegatecall\s*\(/);
+  for (const ln of delLines) {
+    findings.push({
+      patternId: 'delegatecall',
+      severity: 'medium',
+      title: 'delegatecall Usage',
+      line: ln,
+      desc: 'delegatecall executes external code in the calling contract\'s context, sharing storage and ETH balance. If the called contract is malicious or has reentrancy vulnerabilities, it can corrupt storage.',
+      snippet: lines[ln - 1].trim(),
+      fix: '// Ensure the target contract is trusted and audited.\n// Never delegatecall to user-supplied addresses.'
+    });
+  }
+
+  // 7. CEI check: if .call present but no guard and update after
+  // (already covered by check 2, but catch functions without value transfer too)
+  const bareCallLines = allLines(/\w+\.call\s*\(/);
+  for (const ln of bareCallLines) {
+    if (!callLines.includes(ln)) { // not already flagged
+      if (!hasReentrancyGuard) {
+        findings.push({
+          patternId: 'raw_call',
+          severity: 'medium',
+          title: 'Raw .call() Without Guard',
+          line: ln,
+          desc: 'A raw .call() is used without reentrancy protection. Ensure the CEI pattern is followed and consider adding nonReentrant.',
+          snippet: lines[ln - 1].trim(),
+          fix: '// Add nonReentrant modifier and verify CEI pattern.'
+        });
+      }
+    }
+  }
+
+  // Deduplicate by patternId+line
+  const seen = new Set();
+  return findings.filter(f => {
+    const key = f.patternId + ':' + f.line;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function updateScore(score, findings) {
+  const fill = document.getElementById('scoreFill');
+  const num = document.getElementById('scoreNum');
+  const status = document.getElementById('scoreStatus');
+  const circumference = 339;
+
+  if (score === null) {
+    fill.style.strokeDashoffset = circumference;
+    num.textContent = '--';
+    num.style.color = 'var(--text)';
+    fill.style.stroke = 'var(--muted)';
+    status.textContent = 'AWAITING SCAN';
+    document.getElementById('statCritical').textContent = '0';
+    document.getElementById('statHigh').textContent = '0';
+    document.getElementById('statMedium').textContent = '0';
+    document.getElementById('statLow').textContent = '0';
+    return;
+  }
+
+  const offset = circumference * (1 - score / 100);
+  fill.style.strokeDashoffset = offset;
+  num.textContent = score;
+
+  if (score >= 80) { fill.style.stroke = 'var(--green)'; num.style.color = 'var(--green)'; status.textContent = 'LOW RISK'; }
+  else if (score >= 60) { fill.style.stroke = 'var(--yellow)'; num.style.color = 'var(--yellow)'; status.textContent = 'MODERATE RISK'; }
+  else if (score >= 40) { fill.style.stroke = '#ff7800'; num.style.color = '#ff7800'; status.textContent = 'HIGH RISK'; }
+  else { fill.style.stroke = 'var(--red)'; num.style.color = 'var(--red)'; status.textContent = 'CRITICAL RISK'; }
+
+  const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+  findings.forEach(f => { if (f.severity in counts) counts[f.severity]++; });
+  document.getElementById('statCritical').textContent = counts.critical;
+  document.getElementById('statHigh').textContent = counts.high;
+  document.getElementById('statMedium').textContent = counts.medium;
+  document.getElementById('statLow').textContent = counts.low;
+}
+
+function calcScore(findings) {
+  let score = 100;
+  findings.forEach(f => {
+    if (f.severity === 'critical') score -= 25;
+    else if (f.severity === 'high') score -= 15;
+    else if (f.severity === 'medium') score -= 8;
+    else if (f.severity === 'low') score -= 3;
+  });
+  // Bonus for having guard
+  if (findings.find(f => f.patternId === 'reentrancy_guard_present')) score += 10;
+  return Math.max(0, Math.min(100, score));
+}
+
+function runScan() {
+  const code = document.getElementById('code').value.trim();
+  if (!code) {
+    alert('Please paste a Solidity contract first, or click "LOAD VULNERABLE" for a demo.');
+    return;
+  }
+
+  // Animate scan
+  const panel = document.getElementById('editorPanel');
+  panel.classList.add('scanning');
+  const btn = document.querySelector('.btn-scan');
+  btn.textContent = '⬡ SCANNING...';
+  btn.disabled = true;
+
+  setTimeout(() => {
+    panel.classList.remove('scanning');
+    btn.textContent = '⬡ SCAN CONTRACT';
+    btn.disabled = false;
+
+    const findings = analyzeContract(code);
+    const actionFindings = findings.filter(f => f.severity !== 'info');
+    const score = calcScore(actionFindings);
+
+    renderPatterns(findings);
+    updateScore(score, actionFindings);
+    renderResults(findings);
+
+    // Switch to findings tab
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab')[0].classList.add('active');
+    document.getElementById('tab-findings').classList.add('active');
+
+  }, 1200);
+}
+
+function renderResults(findings) {
+  const el = document.getElementById('resultList');
+  if (findings.length === 0) {
+    el.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon" style="opacity:0.8">✓</div>
+        <div class="empty-text" style="color:var(--green)">NO VULNERABILITIES DETECTED</div>
+      </div>`;
+    return;
+  }
+
+  const order = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+  const sorted = [...findings].sort((a, b) => order[a.severity] - order[b.severity]);
+
+  el.innerHTML = sorted.map((f, i) => {
+    const sevClass = {
+      critical: 'sev-critical', high: 'sev-high', medium: 'sev-medium',
+      low: 'sev-low', info: 'sev-info'
+    }[f.severity];
+
+    const snippet = f.snippet ? `<div class="result-code">${escHtml(f.snippet)}</div>` : '';
+    const fix = f.fix ? `<div class="result-fix"><div class="fix-label">// RECOMMENDED FIX</div>${escHtml(f.fix)}</div>` : '';
+
+    return `<div class="result-item" style="animation-delay:${i * 0.08}s">
+      <div class="result-header">
+        <span class="severity-badge ${sevClass}">${f.severity.toUpperCase()}</span>
+        <span class="result-line">LINE ${f.line}</span>
+      </div>
+      <div class="result-title">${f.title}</div>
+      <div class="result-desc">${f.desc}</div>
+      ${snippet}
+      ${fix}
+    </div>`;
+  }).join('');
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
