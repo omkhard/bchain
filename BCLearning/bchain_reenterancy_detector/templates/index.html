@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<!--
+  templates/index.html
+  ====================
+  This is a Jinja2 template — Flask's templating language.
+  Flask reads this file, processes template tags like url_for(),
+  and sends the final HTML to the browser.
+
+  In this project we keep the template simple — most logic
+  lives in Python (scanner.py) and the JS just handles
+  sending requests and updating the page.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BLOCKCHAIN-REENTERANCY-DETECTOR · Reentrancy Scanner</title>
+
+  <!--
+    url_for('static', filename='...')  is a Flask helper.
+    It generates the correct URL path to files in the static/ folder.
+    This way you don't hardcode paths that might break.
+  -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="container">
+
+  <!-- ── HEADER ── -->
+  <header>
+    <div class="logo">
+      <svg width="40" height="40" viewBox="0 0 44 44" fill="none">
+        <polygon points="22,4 40,34 4,34" stroke="#00f5d4" stroke-width="2" fill="rgba(0,245,212,0.08)"/>
+        <line x1="22" y1="14" x2="22" y2="26" stroke="#00f5d4" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="22" cy="30" r="1.5" fill="#00f5d4"/>
+      </svg>
+      <div>
+        <div class="logo-text">BLOCKCHAIN-REENTERANCY-DETECTOR</div>
+        <div class="logo-sub">REENTRANCY VULNERABILITY SCANNER · Flask + Python</div>
+      </div>
+    </div>
+    <div class="badge">v1.0 · EDU</div>
+  </header>
+
+  <!-- ── MAIN LAYOUT: two columns ── -->
+  <div class="main-grid">
+
+    <!-- ════════════════════════════════════════
+         LEFT COLUMN — Editor + Results
+         ════════════════════════════════════════ -->
+    <div class="left-col">
+
+      <!-- Code Editor Panel -->
+      <div class="panel" id="editorPanel">
+        <div class="panel-header">
+          <span class="panel-title">// SOLIDITY CONTRACT INPUT</span>
+          <span class="line-count" id="lineCount">0 LINES</span>
+        </div>
+
+        <!-- The textarea where the user pastes Solidity code -->
+        <div class="editor-wrap">
+          <div class="line-numbers" id="lineNums"></div>
+          <textarea
+            id="codeInput"
+            spellcheck="false"
+            placeholder="// Paste your Solidity contract here...&#10;// pragma solidity ^0.8.0;"
+          ></textarea>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="controls">
+          <!--
+            onclick="scanContract()" calls the JavaScript function
+            defined in static/js/main.js
+          -->
+          <button class="btn-primary" onclick="scanContract()">
+            ⬡ SCAN CONTRACT
+          </button>
+          <button class="btn-secondary" onclick="clearAll()">CLEAR</button>
+
+          <!--
+            These buttons call loadDemo('vulnerable') / loadDemo('safe')
+            which fetches from Flask's /demo/<type> route
+          -->
+          <button class="btn-demo btn-warn" onclick="loadDemo('vulnerable')">
+            LOAD VULNERABLE
+          </button>
+          <button class="btn-demo btn-ok" onclick="loadDemo('safe')">
+            LOAD SAFE
+          </button>
+        </div>
+      </div><!-- /editorPanel -->
+
+
+      <!-- Results Panel -->
+      <div class="panel results-panel">
+
+        <!-- Tab buttons -->
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab('findings', this)">FINDINGS</button>
+          <button class="tab" onclick="switchTab('learn', this)">LEARN</button>
+        </div>
+
+        <!-- FINDINGS tab content -->
+        <div class="tab-content active" id="tab-findings">
+          <div id="resultList">
+            <div class="empty-state">
+              <div class="empty-icon">⬡</div>
+              <div class="empty-text">AWAITING SCAN</div>
+              <div class="empty-sub">Paste a contract and click SCAN CONTRACT</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LEARN tab content (static educational content) -->
+        <div class="tab-content" id="tab-learn">
+          <div class="learn-item">
+            <div class="learn-title" onclick="toggleLearn(this)">
+              <span class="arrow">▶</span> What is a Reentrancy Attack?
+            </div>
+            <div class="learn-body">
+              <p>A reentrancy attack happens when an external contract call is made <strong>before</strong> updating internal state. The called contract can recursively call back into the vulnerable function.</p>
+              <pre class="code-block bad">// ❌ VULNERABLE PATTERN
+function withdraw(uint amount) public {
+    require(balances[msg.sender] >= amount);
+    // External call BEFORE state update
+    (bool ok,) = msg.sender.call{value: amount}("");
+    balances[msg.sender] -= amount; // Too late!
+}</pre>
+              <div class="learn-note">💡 The 2016 DAO hack drained ~$60M ETH using exactly this pattern.</div>
+            </div>
+          </div>
+
+          <div class="learn-item">
+            <div class="learn-title" onclick="toggleLearn(this)">
+              <span class="arrow">▶</span> The Fix: Checks-Effects-Interactions (CEI)
+            </div>
+            <div class="learn-body">
+              <p>Always follow this order: <strong>1) Check</strong> conditions, <strong>2) Effect</strong> (update state), <strong>3) Interact</strong> (external call).</p>
+              <pre class="code-block good">// ✅ SAFE — CEI Pattern
+function withdraw(uint amount) external nonReentrant {
+    require(balances[msg.sender] >= amount); // Check
+    balances[msg.sender] -= amount;          // Effect
+    (bool ok,) = msg.sender.call{value: amount}(""); // Interact
+    require(ok);
+}</pre>
+            </div>
+          </div>
+
+          <div class="learn-item">
+            <div class="learn-title" onclick="toggleLearn(this)">
+              <span class="arrow">▶</span> ReentrancyGuard Mutex
+            </div>
+            <div class="learn-body">
+              <p>OpenZeppelin's ReentrancyGuard sets a lock before execution and releases it after, blocking any recursive calls.</p>
+              <pre class="code-block good">// Simplified ReentrancyGuard logic:
+modifier nonReentrant() {
+    require(_status != ENTERED); // Is locked?
+    _status = ENTERED;           // Lock
+    _;                           // Run function
+    _status = NOT_ENTERED;       // Unlock
+}</pre>
+            </div>
+          </div>
+
+          <div class="learn-item">
+            <div class="learn-title" onclick="toggleLearn(this)">
+              <span class="arrow">▶</span> External Call in Loop
+            </div>
+            <div class="learn-body">
+              <p>Calling external contracts inside a loop is dangerous: each iteration can re-enter, and a single failure reverts the whole loop.</p>
+              <pre class="code-block bad">// ❌ DANGEROUS
+for (uint i = 0; i < users.length; i++) {
+    users[i].call{value: reward}(""); // Any user can re-enter!
+}</pre>
+              <div class="learn-note">💡 Use Pull Payment: let users withdraw themselves instead of pushing to all.</div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /results-panel -->
+
+    </div><!-- /left-col -->
+
+
+    <!-- ════════════════════════════════════════
+         RIGHT COLUMN — Score + Patterns
+         ════════════════════════════════════════ -->
+    <div class="right-col">
+
+      <!-- Security Score Panel -->
+      <div class="panel score-panel">
+        <div class="panel-header">
+          <span class="panel-title">// SECURITY SCORE</span>
+          <div class="dot dot-blue"></div>
+        </div>
+
+        <div class="score-body">
+          <!-- SVG ring — animated by JS -->
+          <div class="score-ring">
+            <svg width="120" height="120" viewBox="0 0 120 120">
+              <!-- Background track circle -->
+              <circle class="ring-track" cx="60" cy="60" r="54"/>
+              <!-- Foreground fill — stroke-dashoffset controlled by JS -->
+              <circle class="ring-fill" id="ringFill" cx="60" cy="60" r="54"/>
+            </svg>
+            <div class="score-center">
+              <div class="score-num" id="scoreNum">--</div>
+              <div class="score-label">/ 100</div>
+            </div>
+          </div>
+
+          <div class="score-status" id="scoreStatus">AWAITING SCAN</div>
+        </div>
+
+        <!-- Severity count grid -->
+        <div class="stats-grid">
+          <div class="stat">
+            <div class="stat-val red" id="statCritical">0</div>
+            <div class="stat-label">CRITICAL</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val orange" id="statHigh">0</div>
+            <div class="stat-label">HIGH</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val yellow" id="statMedium">0</div>
+            <div class="stat-label">MEDIUM</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val blue" id="statLow">0</div>
+            <div class="stat-label">LOW</div>
+          </div>
+        </div>
+      </div><!-- /score-panel -->
+
+
+      <!-- Pattern Checklist Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">// PATTERN CHECKS</span>
+          <div class="dot dot-yellow"></div>
+        </div>
+        <!--
+          This list is populated by JavaScript after a scan.
+          The JS fetches /patterns from Flask to get the list,
+          then compares with findings to set CLEAN / DETECTED status.
+        -->
+        <div id="patternList" class="pattern-list">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+
+    </div><!-- /right-col -->
+
+  </div><!-- /main-grid -->
+
+</div><!-- /container -->
+
+<!--
+  Load our JavaScript file.
+  url_for() generates the correct path to static/js/main.js
+-->
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+</body>
+</html>
