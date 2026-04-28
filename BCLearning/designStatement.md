@@ -56,7 +56,45 @@ contract Solidity_Reentrancy {
 # basicallly requirements.txt it is 
 pip install web3 py-solc-x slither-analyzer
 npm install -g ganache hardhat
+
+npm init -y
+npm install --save-dev hardhat @nomicfoundation/hardhat-toolbox
+npm install --save-dev ganache
 ```
+
+#### Complete Blockchain Security Scanner Project
+#### Project Structure
+
+blockchain-security-scanner/
+├── contracts/
+│   ├── vulnerable/
+│   │   └── VulnerableContract.sol
+│   └── fixed/
+│       └── SecureContract.sol
+├── src/
+│   ├── scanner/
+│   │   ├── __init__.py
+│   │   ├── contract_scanner.py
+│   │   └── vulnerability_checks.py
+│   ├── reports/
+│   │   ├── __init__.py
+│   │   └── report_generator.py
+│   └── utils/
+│       ├── __init__.py
+│       └── helpers.py
+├── tests/
+│   └── test_scanner.py
+├── main.py
+└── requirements.txt
+
+
+
+
+
+
+
+
+
 ### Week 3-4: Build Core Scanner
 TODO
 

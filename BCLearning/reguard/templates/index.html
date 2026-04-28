@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RE-GUARD · Reentrancy Scanner</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="logo">
+      <svg width="40" height="40" viewBox="0 0 44 44" fill="none">
+        <polygon points="22,4 40,34 4,34" stroke="#00f5d4" stroke-width="2" fill="rgba(0,245,212,0.08)"/>
+        <line x1="22" y1="14" x2="22" y2="26" stroke="#00f5d4" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="22" cy="30" r="1.5" fill="#00f5d4"/>
+      </svg>
+      <div>
+        <div class="logo-text">RE-GUARD</div>
+        <div class="logo-sub">REENTRANCY SCANNER · FLASK + PYTHON + SOLIDITY COMPILER</div>
+      </div>
+    </div>
+    <!-- Compiler status badge — filled by JS on load -->
+    <div id="compilerBadge" class="compiler-badge pending">
+      <span class="badge-dot"></span>
+      <span id="compilerBadgeText">CHECKING COMPILER...</span>
+    </div>
+  </header>
+
+  <!-- Compiler info bar — shown after status loads -->
+  <div id="compilerBar" class="compiler-bar" style="display:none">
+    <span id="compilerBarIcon">⬡</span>
+    <span id="compilerBarText"></span>
+    <span class="compiler-bar-tip">
+      AST mode traces exact call graphs · Regex mode is pattern matching
+    </span>
+  </div>
+
+  <div class="main-grid">
+
+    <!-- LEFT -->
+    <div class="left-col">
+
+      <div class="panel" id="editorPanel">
+        <div class="panel-header">
+          <span class="panel-title">// SOLIDITY CONTRACT INPUT</span>
+          <span class="line-count" id="lineCount">0 LINES</span>
+        </div>
+        <div class="editor-wrap">
+          <div class="line-numbers" id="lineNums"></div>
+          <textarea id="codeInput" spellcheck="false"
+            placeholder="// Paste your Solidity contract here...&#10;pragma solidity ^0.8.0;"></textarea>
+        </div>
+        <div class="controls">
+          <button class="btn-primary" onclick="scanContract()">⬡ SCAN CONTRACT</button>
+          <button class="btn-secondary" onclick="clearAll()">CLEAR</button>
+          <button class="btn-demo btn-warn" onclick="loadDemo('vulnerable')">LOAD VULNERABLE</button>
+          <button class="btn-demo btn-ok" onclick="loadDemo('safe')">LOAD SAFE</button>
+        </div>
+      </div>
+
+      <div class="panel results-panel">
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab('findings', this)">FINDINGS</button>
+          <button class="tab" onclick="switchTab('compiler', this)">COMPILER</button>
+          <button class="tab" onclick="switchTab('learn', this)">LEARN</button>
+        </div>
+
+        <!-- FINDINGS tab -->
+        <div class="tab-content active" id="tab-findings">
+          <div id="resultList">
+            <div class="empty-state">
+              <div class="empty-icon">⬡</div>
+              <div class="empty-text">AWAITING SCAN</div>
+              <div class="empty-sub">Paste a contract and click SCAN CONTRACT</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- COMPILER tab -->
+        <div class="tab-content" id="tab-compiler">
+          <div id="compilerOutput">
+            <div class="empty-state">
+              <div class="empty-icon">⚙</div>
+              <div class="empty-text">NO COMPILATION YET</div>
+              <div class="empty-sub">Run a scan to see compiler output</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LEARN tab -->
+        <div class="tab-content" id="tab-learn">
+          <div class="learn-item">
+            <div class="learn-title" onclick="toggleLearn(this)">
+              <span class="arrow">▶</span> What is a Reentrancy Attack?
+            </div>
+            <div class="learn-body">
+              <p>A reentrancy attack happens when an external call is made <strong>before</strong> internal state is updated. The called contract can recursively re-enter the vulnerable function.</p>
+              <pre class="code-block bad">// VULNERABLE
+function withdraw(uint amount) public {
+    require(balances[msg.sender] >= amount);
+    (bool ok,) = msg.sender.call{value: amount}("");
+    balances[msg.sender] -= amount; // Too late!
+}</pre>
+              <div class="learn-note">The 2016 DAO hack drained ~$60M ETH using this exact pattern.</div>
+            </div>
+          </div>
+          <div class="learn-item">
+            <div class="learn-title" onclick="toggleLearn(this)">
+              <span class="arrow">▶</span> CEI Pattern (Checks-Effects-Interactions)
+            </div>
+            <div class="learn-body">
+              <p>Always: <strong>1) Check</strong> conditions → <strong>2) Effect</strong> (update state) → <strong>3) Interact</strong> (external call).</p>
+              <pre class="code-block good">// SAFE — CEI
+function withdraw(uint amount) external nonReentrant {
+    require(balances[msg.sender] >= amount); // Check
+    balances[msg.sender] -= amount;          // Effect first
+    (bool ok,) = msg.sender.call{value: amount}(""); // Interact last
+    require(ok);
+}</pre>
+            </div>
+          </div>
+          <div class="learn-item">
+            <div class="learn-title" onclick="toggleLearn(this)">
+              <span class="arrow">▶</span> Why AST Analysis is Better Than Regex
+            </div>
+            <div class="learn-body">
+              <p>Regex reads raw text — it can be fooled by comments, string literals, and multi-line expressions. A Solidity AST is the <strong>actual parsed structure</strong>.</p>
+              <pre class="code-block good">// Regex would flag this as a CEI violation — it's not:
+// "msg.sender.call{value: amount}" appears before "balances -="
+// but the comment doesn't execute!
+
+// AST knows the comment is not code and ignores it.
+// (bool ok,) = msg.sender.call{value: amount}("");</pre>
+              <div class="learn-note">Install solc to enable AST mode: <code>pip install py-solc-x</code> then <code>python -c "from solcx import install_solc; install_solc('0.8.20')"</code></div>
+            </div>
+          </div>
+          <div class="learn-item">
+            <div class="learn-title" onclick="toggleLearn(this)">
+              <span class="arrow">▶</span> Cross-Function Reentrancy
+            </div>
+            <div class="learn-body">
+              <p>More subtle: attacker calls function A (which makes an external call), then re-enters via function B that shares the same state variable.</p>
+              <pre class="code-block bad">// VULNERABLE — cross-function
+function withdraw() external {
+    (bool ok,) = msg.sender.call{value: balances[msg.sender]}("");
+    balances[msg.sender] = 0;
+}
+// Attacker re-enters via transfer() before balances[msg.sender] = 0
+function transfer(address to, uint amt) external {
+    require(balances[msg.sender] >= amt);
+    balances[msg.sender] -= amt; // stale state!
+    balances[to] += amt;
+}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="right-col">
+
+      <!-- Score -->
+      <div class="panel score-panel">
+        <div class="panel-header">
+          <span class="panel-title">// SECURITY SCORE</span>
+          <div class="dot dot-blue"></div>
+        </div>
+        <div class="score-body">
+          <div class="score-ring">
+            <svg width="120" height="120" viewBox="0 0 120 120">
+              <circle class="ring-track" cx="60" cy="60" r="54"/>
+              <circle class="ring-fill" id="ringFill" cx="60" cy="60" r="54"/>
+            </svg>
+            <div class="score-center">
+              <div class="score-num" id="scoreNum">--</div>
+              <div class="score-label">/ 100</div>
+            </div>
+          </div>
+          <div class="score-status" id="scoreStatus">AWAITING SCAN</div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat">
+            <div class="stat-val red"    id="statCritical">0</div>
+            <div class="stat-label">CRITICAL</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val orange" id="statHigh">0</div>
+            <div class="stat-label">HIGH</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val yellow" id="statMedium">0</div>
+            <div class="stat-label">MEDIUM</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val blue"   id="statLow">0</div>
+            <div class="stat-label">LOW</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pattern checklist -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">// PATTERN CHECKS</span>
+          <div class="dot dot-yellow"></div>
+        </div>
+        <div id="patternList" class="pattern-list"></div>
+      </div>
+
+      <!-- Analysis mode card -->
+      <div class="panel mode-panel">
+        <div class="panel-header">
+          <span class="panel-title">// ANALYSIS MODE</span>
+        </div>
+        <div class="mode-body">
+          <div class="mode-item" id="modeAst">
+            <div class="mode-icon">🔬</div>
+            <div>
+              <div class="mode-name">AST Mode</div>
+              <div class="mode-desc">Requires solc binary. Parses code into an Abstract Syntax Tree for exact call-graph tracing.</div>
+            </div>
+          </div>
+          <div class="mode-divider">+</div>
+          <div class="mode-item active" id="modeRegex">
+            <div class="mode-icon">🔍</div>
+            <div>
+              <div class="mode-name">Regex Mode</div>
+              <div class="mode-desc">Always active. Pattern-matches raw source text. Fast, no dependencies.</div>
+            </div>
+          </div>
+        </div>
+        <div class="mode-footer" id="modeFooter">
+          Run <code>pip install py-solc-x</code> and install solc to enable AST mode
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

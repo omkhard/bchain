@@ -443,3 +443,17 @@ The mutex sets a flag to `ENTERED` before executing the function. Any recursive 
 ---
 
 *BLOCKCHAIN-REENTERANCY-DETECTOR is an educational tool. For production Solidity auditing, use [Slither](https://github.com/crytic/slither), [MythX](https://mythx.io/), or hire a professional auditor.*
+
+
+## New App Using Solidity compiler
+```bash
+unzip reguard-flask-v2.zip
+cd reguard
+pip install -r requirements.txt
+
+# Optional: enable full AST mode
+python -c "from solcx import install_solc; install_solc('0.8.20')"
+
+python app.py
+# → http://localhost:5000
+```
