@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AC-GUARD · Access Control Auditor</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="logo">
+      <svg width="40" height="40" viewBox="0 0 44 44" fill="none">
+        <rect x="8" y="18" width="28" height="20" rx="2" stroke="#00f5d4" stroke-width="2" fill="rgba(0,245,212,0.06)"/>
+        <path d="M15 18V13a7 7 0 1 1 14 0v5" stroke="#00f5d4" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="22" cy="27" r="3" fill="#00f5d4"/>
+        <line x1="22" y1="30" x2="22" y2="33" stroke="#00f5d4" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <div class="logo-text">AC-GUARD</div>
+        <div class="logo-sub">SMART CONTRACT ACCESS CONTROL AUDITOR · Flask + Python</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="badge">SWC-105 · SWC-106 · SWC-115 · SWC-118</div>
+    </div>
+  </header>
+
+  <!-- Demo selector bar -->
+  <div class="demo-bar">
+    <span class="demo-label">LOAD DEMO:</span>
+    <button class="btn-demo" onclick="loadDemo('vulnerable_vault')">⚠ Vulnerable Vault</button>
+    <button class="btn-demo" onclick="loadDemo('secure_vault')">✓ Secure Vault</button>
+    <button class="btn-demo" onclick="loadDemo('parity_wallet_bug')">💀 Parity Wallet Bug</button>
+    <button class="btn-demo" onclick="loadDemo('rbac_example')">🔐 RBAC Example</button>
+    <button class="btn-demo" onclick="loadDemo('tx_origin_vuln')">🎣 tx.origin Attack</button>
+  </div>
+
+  <div class="main-grid">
+
+    <!-- LEFT: Editor + Results -->
+    <div class="left-col">
+
+      <div class="panel" id="editorPanel">
+        <div class="panel-header">
+          <span class="panel-title">// SOLIDITY CONTRACT INPUT</span>
+          <span class="line-count" id="lineCount">0 LINES</span>
+        </div>
+        <div class="editor-wrap">
+          <div class="line-numbers" id="lineNums"></div>
+          <textarea id="codeInput" spellcheck="false"
+            placeholder="// Paste your Solidity contract here...&#10;// pragma solidity ^0.8.0;"></textarea>
+        </div>
+        <div class="controls">
+          <button class="btn-primary" onclick="auditContract()">🔒 AUDIT CONTRACT</button>
+          <button class="btn-secondary" onclick="clearAll()">CLEAR</button>
+        </div>
+      </div>
+
+      <!-- Results tabs -->
+      <div class="panel results-panel">
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab('findings', this)">FINDINGS</button>
+          <button class="tab" onclick="switchTab('functions', this)">FUNCTIONS</button>
+          <button class="tab" onclick="switchTab('roles', this)">ROLES & MODIFIERS</button>
+          <button class="tab" onclick="switchTab('learn', this)">LEARN</button>
+        </div>
+
+        <!-- FINDINGS -->
+        <div class="tab-content active" id="tab-findings">
+          <div id="resultList">
+            <div class="empty-state">
+              <div class="empty-icon">🔒</div>
+              <div class="empty-text">AWAITING AUDIT</div>
+              <div class="empty-sub">Paste a contract above and click AUDIT CONTRACT</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FUNCTIONS TABLE -->
+        <div class="tab-content" id="tab-functions">
+          <div id="functionTable">
+            <div class="empty-state">
+              <div class="empty-icon">⬡</div>
+              <div class="empty-text">NO SCAN YET</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ROLES & MODIFIERS -->
+        <div class="tab-content" id="tab-roles">
+          <div id="rolesPanel">
+            <div class="empty-state">
+              <div class="empty-icon">⬡</div>
+              <div class="empty-text">NO SCAN YET</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LEARN -->
+        <div class="tab-content" id="tab-learn">
+          <div class="learn-item">
+            <div class="learn-title" onclick="toggleLearn(this)"><span class="arrow">▶</span> What is Access Control?</div>
+            <div class="learn-body">
+              <p>Access control answers: <strong>"Who is allowed to call this function?"</strong> In Solidity, every function is callable by anyone unless restricted. Forgetting to add a modifier means any attacker on the internet can call it.</p>
+              <pre class="code-block bad">// ❌ Anyone can call this — no restriction
+function withdraw(uint amount) external {
+    payable(msg.sender).transfer(amount);
+}</pre>
+              <pre class="code-block good">// ✅ Only the owner can call this
+function withdraw(uint amount) external onlyOwner {
+    payable(msg.sender).transfer(amount);
+}</pre>
+            </div>
+          </div>
+          <div class="learn-item">
+            <div class="learn-title" onclick="toggleLearn(this)"><span class="arrow">▶</span> The Parity Wallet Hack ($30M)</div>
+            <div class="learn-body">
+              <p>In 2017, Parity's multisig wallet library had an unprotected <code>initWallet()</code> function. An attacker called it on the deployed library, became the owner, then called <code>kill()</code> to destroy it — permanently freezing $150M in dependent wallets.</p>
+              <pre class="code-block bad">// ❌ PARITY BUG — anyone can reinitialize
+function initWallet(address[] _owners) public {
+    owner = _owners[0]; // No protection!
+}
+
+function kill(address _to) public {
+    selfdestruct(payable(_to)); // No guard!
+}</pre>
+              <div class="learn-note">Fix: Use a constructor instead of init(), or add an <code>initialized</code> boolean flag.</div>
+            </div>
+          </div>
+          <div class="learn-item">
+            <div class="learn-title" onclick="toggleLearn(this)"><span class="arrow">▶</span> tx.origin vs msg.sender</div>
+            <div class="learn-body">
+              <p><code>tx.origin</code> is the original EOA that started the transaction chain. <code>msg.sender</code> is the immediate caller. An attacker can trick a victim into calling a malicious contract, which then calls yours — <code>tx.origin</code> is still the victim!</p>
+              <pre class="code-block bad">// ❌ Phishing attack possible
+require(tx.origin == owner, "Not owner");
+// Attacker: trick owner → call MaliciousContract → calls your contract
+// tx.origin = owner ✓  ... but msg.sender = attacker contract</pre>
+              <pre class="code-block good">// ✅ Always use msg.sender
+require(msg.sender == owner, "Not owner");</pre>
+            </div>
+          </div>
+          <div class="learn-item">
+            <div class="learn-title" onclick="toggleLearn(this)"><span class="arrow">▶</span> Two-Step Ownership Transfer</div>
+            <div class="learn-body">
+              <p>Single-step transfers are dangerous: if you mistype the address, ownership is permanently lost. Two-step forces the new owner to prove they control the address.</p>
+              <pre class="code-block bad">// ❌ One typo = lost contract forever
+function transferOwnership(address newOwner) external onlyOwner {
+    owner = newOwner; // If newOwner is wrong, game over
+}</pre>
+              <pre class="code-block good">// ✅ Two-step: new owner must accept
+function transferOwnership(address newOwner) external onlyOwner {
+    pendingOwner = newOwner;
+}
+function acceptOwnership() external {
+    require(msg.sender == pendingOwner);
+    owner = pendingOwner;
+    pendingOwner = address(0);
+}</pre>
+            </div>
+          </div>
+          <div class="learn-item">
+            <div class="learn-title" onclick="toggleLearn(this)"><span class="arrow">▶</span> Role-Based Access Control (RBAC)</div>
+            <div class="learn-body">
+              <p>For complex protocols, a single owner is not enough. OpenZeppelin's AccessControl lets you define granular roles: MINTER_ROLE, PAUSER_ROLE, ADMIN_ROLE — each granted to different addresses.</p>
+              <pre class="code-block good">bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+
+function mint(address to, uint amount) external onlyRole(MINTER_ROLE) {
+    _mint(to, amount);
+}
+// grantRole(MINTER_ROLE, someAddress) — only DEFAULT_ADMIN_ROLE</pre>
+              <div class="learn-note">Real-world example: Compound Finance uses RBAC to separate proposers from executors in governance.</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- RIGHT: Score + Patterns + Function Summary -->
+    <div class="right-col">
+
+      <!-- Score -->
+      <div class="panel score-panel">
+        <div class="panel-header">
+          <span class="panel-title">// ACCESS CONTROL SCORE</span>
+          <div class="dot dot-blue"></div>
+        </div>
+        <div class="score-body">
+          <div class="score-ring">
+            <svg width="120" height="120" viewBox="0 0 120 120">
+              <circle class="ring-track" cx="60" cy="60" r="54"/>
+              <circle class="ring-fill" id="ringFill" cx="60" cy="60" r="54"/>
+            </svg>
+            <div class="score-center">
+              <div class="score-num" id="scoreNum">--</div>
+              <div class="score-label">/ 100</div>
+            </div>
+          </div>
+          <div class="score-status" id="scoreStatus">AWAITING AUDIT</div>
+          <div class="contract-name" id="contractName"></div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat"><div class="stat-val red"    id="statCritical">0</div><div class="stat-label">CRITICAL</div></div>
+          <div class="stat"><div class="stat-val orange" id="statHigh">0</div><div class="stat-label">HIGH</div></div>
+          <div class="stat"><div class="stat-val yellow" id="statMedium">0</div><div class="stat-label">MEDIUM</div></div>
+          <div class="stat"><div class="stat-val blue"   id="statLow">0</div><div class="stat-label">LOW</div></div>
+        </div>
+      </div>
+
+      <!-- Pattern Checks -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">// VULNERABILITY CHECKS</span>
+          <div class="dot dot-yellow"></div>
+        </div>
+        <div id="patternList" class="pattern-list"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
